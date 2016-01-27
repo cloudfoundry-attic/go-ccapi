@@ -14,22 +14,25 @@ import (
 
 var _ = Describe("Client", func() {
 	var (
-		c      client.Client
-		server *ghttp.Server
+		uaaServer *ghttp.Server
+		ccServer  *ghttp.Server
+		c         client.Client
 	)
 
 	BeforeEach(func() {
-		server = ghttp.NewServer()
-		c = client.NewClient(server.URL(), "auth-token")
+		uaaServer = ghttp.NewServer()
+		ccServer = ghttp.NewServer()
+		c = client.NewClient(ccServer.URL(), uaaServer.URL(), "auth-token")
 	})
 
 	AfterEach(func() {
-		server.Close()
+		ccServer.Close()
+		uaaServer.Close()
 	})
 
 	Describe("GetApplications", func() {
 		BeforeEach(func() {
-			server.AppendHandlers(
+			ccServer.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"auth-token"}}),
 					ghttp.VerifyRequest("GET", "/v3/apps"),
@@ -41,7 +44,7 @@ var _ = Describe("Client", func() {
 		It("tries to get applications", func() {
 			_, err := c.GetApplications(url.Values{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(server.ReceivedRequests()).To(HaveLen(1))
+			Expect(ccServer.ReceivedRequests()).To(HaveLen(1))
 		})
 
 		It("returns the applications", func() {
@@ -87,9 +90,9 @@ var _ = Describe("Client", func() {
 				`))
 		})
 
-		Context("when the server returns a non-200 response", func() {
+		Context("when the ccServer returns a non-200 response", func() {
 			BeforeEach(func() {
-				server.SetHandler(0,
+				ccServer.SetHandler(0,
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v3/apps"),
 						ghttp.RespondWith(http.StatusInternalServerError, ``),
@@ -105,7 +108,7 @@ var _ = Describe("Client", func() {
 
 		Context("when given params", func() {
 			BeforeEach(func() {
-				server.SetHandler(0,
+				ccServer.SetHandler(0,
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v3/apps", "space_guids=space-guid-1,space-guid-2"),
 						ghttp.RespondWith(http.StatusOK, applicationsJSON),
@@ -121,9 +124,9 @@ var _ = Describe("Client", func() {
 			})
 		})
 
-		Context("when the server returns bad JSON", func() {
+		Context("when the ccServer returns bad JSON", func() {
 			BeforeEach(func() {
-				server.SetHandler(0,
+				ccServer.SetHandler(0,
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v3/apps"),
 						ghttp.RespondWith(http.StatusOK, `:bad_json:`),
@@ -140,7 +143,7 @@ var _ = Describe("Client", func() {
 
 	Describe("GetResource", func() {
 		BeforeEach(func() {
-			server.AppendHandlers(
+			ccServer.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"auth-token"}}),
 					ghttp.VerifyRequest("GET", "/the-path"),
@@ -152,18 +155,18 @@ var _ = Describe("Client", func() {
 		It("executes a request for the given path", func() {
 			_, err := c.GetResource("/the-path")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(server.ReceivedRequests()).To(HaveLen(1))
+			Expect(ccServer.ReceivedRequests()).To(HaveLen(1))
 		})
 
-		It("returns the resource from the server", func() {
+		It("returns the resource from the ccServer", func() {
 			responseBody, err := c.GetResource("/the-path")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(responseBody).To(Equal([]byte(`{"key": "value"}`)))
 		})
 
-		Context("when the server returns a non-200 response", func() {
+		Context("when the ccServer returns a non-200 response", func() {
 			BeforeEach(func() {
-				server.SetHandler(0,
+				ccServer.SetHandler(0,
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/the-path"),
 						ghttp.RespondWith(http.StatusInternalServerError, `{"error": "some-error"}`),
@@ -176,7 +179,7 @@ var _ = Describe("Client", func() {
 				Expect(err).To(HaveOccurred())
 			})
 
-			It("returns any body the server returns", func() {
+			It("returns any body the ccServer returns", func() {
 				responseBody, _ := c.GetResource("/the-path")
 				Expect(responseBody).To(Equal([]byte(`{"error": "some-error"}`)))
 			})
@@ -185,7 +188,7 @@ var _ = Describe("Client", func() {
 
 	Describe("GetResources", func() {
 		BeforeEach(func() {
-			server.AppendHandlers(
+			ccServer.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"auth-token"}}),
 					ghttp.VerifyRequest("GET", "/the-path"),
@@ -241,13 +244,13 @@ var _ = Describe("Client", func() {
 		It("executes a request for each page of resources returned when given a limit of 0", func() {
 			_, err := c.GetResources("/the-path", 0)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(server.ReceivedRequests()).To(HaveLen(2))
+			Expect(ccServer.ReceivedRequests()).To(HaveLen(2))
 		})
 
 		It("executes only as many requests as necessary to return the requested limit of resources", func() {
 			_, err := c.GetResources("/the-path", 2)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(server.ReceivedRequests()).To(HaveLen(1))
+			Expect(ccServer.ReceivedRequests()).To(HaveLen(1))
 		})
 
 		It("does not return more resources than are requested", func() {
@@ -261,12 +264,12 @@ var _ = Describe("Client", func() {
 		It("returns an error when given an invalid path", func() {
 			_, err := c.GetResources("[%", 0)
 			Expect(err).To(HaveOccurred())
-			Expect(server.ReceivedRequests()).To(HaveLen(0))
+			Expect(ccServer.ReceivedRequests()).To(HaveLen(0))
 		})
 
-		Context("when the server responds with bad JSON", func() {
+		Context("when the ccServer responds with bad JSON", func() {
 			BeforeEach(func() {
-				server.SetHandler(0,
+				ccServer.SetHandler(0,
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/the-path"),
 						ghttp.RespondWith(http.StatusOK, `:bad_json:`),
@@ -278,6 +281,26 @@ var _ = Describe("Client", func() {
 				_, err := c.GetResources("/the-path", 0)
 				Expect(err).To(HaveOccurred())
 			})
+		})
+	})
+
+	Describe("RefreshAuthToken", func() {
+		BeforeEach(func() {
+			uaaServer.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("POST", "/oauth/token"),
+					ghttp.VerifyHeader(map[string][]string{
+						"Authorization": []string{"Basic Y2Y6"},
+						"accept":        []string{"application/json"},
+						"content-type":  []string{"application/x-www-form-urlencoded"},
+					}),
+				),
+			)
+		})
+
+		It("tries to refresh the auth token", func() {
+			c.RefreshAuthToken()
+			Expect(uaaServer.ReceivedRequests()).To(HaveLen(1))
 		})
 	})
 })

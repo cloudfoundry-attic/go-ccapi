@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,23 +18,49 @@ type Client interface {
 	GetApplications(queryParams url.Values) ([]byte, error)
 	GetResource(path string) ([]byte, error)
 	GetResources(path string, limit int) ([]byte, error)
-	SetToken(token string)
+	RefreshAuthToken() error
 }
 
 type client struct {
-	requestGenerator *rata.RequestGenerator
-	httpClient       *http.Client
-	host             string
-	token            string
+	ccRequestGenerator  *rata.RequestGenerator
+	uaaRequestGenerator *rata.RequestGenerator
+	httpClient          *http.Client
+	ccEndpoint          string
+	token               string
 }
 
-func NewClient(host, token string) Client {
+func NewClient(ccEndpoint, uaaEndpoint, token string) Client {
 	return &client{
-		requestGenerator: rata.NewRequestGenerator(host, routing.Routes),
-		httpClient:       &http.Client{},
-		host:             host,
-		token:            token,
+		ccRequestGenerator:  rata.NewRequestGenerator(ccEndpoint, routing.CCRoutes),
+		uaaRequestGenerator: rata.NewRequestGenerator(uaaEndpoint, routing.UAARoutes),
+		httpClient:          &http.Client{},
+		ccEndpoint:          ccEndpoint,
+		token:               token,
 	}
+}
+
+func (c client) RefreshAuthToken() error {
+	req, err := c.uaaRequestGenerator.CreateRequest("refresh_token", rata.Params{}, strings.NewReader(""))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("cf:")))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// responseBytes, _ := ioutil.ReadAll(resp.Body)
+	// if resp.StatusCode != http.StatusOK {
+	// 	return responseBytes, fmt.Errorf("Received response with status code %d", resp.StatusCode)
+	// }
+
+	return nil
 }
 
 func (c client) SetToken(token string) {
@@ -41,7 +68,7 @@ func (c client) SetToken(token string) {
 }
 
 func (c client) GetApplications(queryParams url.Values) ([]byte, error) {
-	req, err := c.requestGenerator.CreateRequest("apps", rata.Params{}, strings.NewReader(""))
+	req, err := c.ccRequestGenerator.CreateRequest("apps", rata.Params{}, strings.NewReader(""))
 	if err != nil {
 		return []byte{}, err
 	}
@@ -61,7 +88,7 @@ func (c client) GetApplications(queryParams url.Values) ([]byte, error) {
 }
 
 func (c client) GetResource(path string) ([]byte, error) {
-	url := c.host + "/" + strings.TrimLeft(path, "/")
+	url := c.ccEndpoint + "/" + strings.TrimLeft(path, "/")
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -83,7 +110,7 @@ func (c client) GetResources(path string, limit int) ([]byte, error) {
 	nextPath := &path
 
 	for nextPath != nil && (limit == 0 || len(resources) < limit) {
-		rs, nextPath, err = c.getResources(c.host, nextPath)
+		rs, nextPath, err = c.getResources(nextPath)
 		if err != nil {
 			return []byte{}, err
 		}
@@ -102,13 +129,13 @@ func (c client) GetResources(path string, limit int) ([]byte, error) {
 	return responseJSON, nil
 }
 
-func (c client) getResources(host string, path *string) ([]interface{}, *string, error) {
+func (c client) getResources(path *string) ([]interface{}, *string, error) {
 	u, err := url.Parse(*path)
 	if err != nil {
 		return []interface{}{}, nil, err
 	}
 
-	req, err := http.NewRequest("GET", c.host+u.Path, nil)
+	req, err := http.NewRequest("GET", c.ccEndpoint+u.Path, nil)
 	if err != nil {
 		return []interface{}{}, nil, err
 	}

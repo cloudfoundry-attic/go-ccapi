@@ -37,10 +37,17 @@ type FakeClient struct {
 		result1 []byte
 		result2 error
 	}
-	SetTokenStub        func(token string)
-	setTokenMutex       sync.RWMutex
-	setTokenArgsForCall []struct {
-		token string
+	RefreshAuthTokenStub        func() error
+	refreshAuthTokenMutex       sync.RWMutex
+	refreshAuthTokenArgsForCall []struct{}
+	refreshAuthTokenReturns     struct {
+		result1 error
+	}
+	GetAuthTokenStub        func() string
+	getAuthTokenMutex       sync.RWMutex
+	getAuthTokenArgsForCall []struct{}
+	getAuthTokenReturns     struct {
+		result1 string
 	}
 }
 
@@ -144,27 +151,52 @@ func (fake *FakeClient) GetResourcesReturns(result1 []byte, result2 error) {
 	}{result1, result2}
 }
 
-func (fake *FakeClient) SetToken(token string) {
-	fake.setTokenMutex.Lock()
-	fake.setTokenArgsForCall = append(fake.setTokenArgsForCall, struct {
-		token string
-	}{token})
-	fake.setTokenMutex.Unlock()
-	if fake.SetTokenStub != nil {
-		fake.SetTokenStub(token)
+func (fake *FakeClient) RefreshAuthToken() error {
+	fake.refreshAuthTokenMutex.Lock()
+	fake.refreshAuthTokenArgsForCall = append(fake.refreshAuthTokenArgsForCall, struct{}{})
+	fake.refreshAuthTokenMutex.Unlock()
+	if fake.RefreshAuthTokenStub != nil {
+		return fake.RefreshAuthTokenStub()
+	} else {
+		return fake.refreshAuthTokenReturns.result1
 	}
 }
 
-func (fake *FakeClient) SetTokenCallCount() int {
-	fake.setTokenMutex.RLock()
-	defer fake.setTokenMutex.RUnlock()
-	return len(fake.setTokenArgsForCall)
+func (fake *FakeClient) RefreshAuthTokenCallCount() int {
+	fake.refreshAuthTokenMutex.RLock()
+	defer fake.refreshAuthTokenMutex.RUnlock()
+	return len(fake.refreshAuthTokenArgsForCall)
 }
 
-func (fake *FakeClient) SetTokenArgsForCall(i int) string {
-	fake.setTokenMutex.RLock()
-	defer fake.setTokenMutex.RUnlock()
-	return fake.setTokenArgsForCall[i].token
+func (fake *FakeClient) RefreshAuthTokenReturns(result1 error) {
+	fake.RefreshAuthTokenStub = nil
+	fake.refreshAuthTokenReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) GetAuthToken() string {
+	fake.getAuthTokenMutex.Lock()
+	fake.getAuthTokenArgsForCall = append(fake.getAuthTokenArgsForCall, struct{}{})
+	fake.getAuthTokenMutex.Unlock()
+	if fake.GetAuthTokenStub != nil {
+		return fake.GetAuthTokenStub()
+	} else {
+		return fake.getAuthTokenReturns.result1
+	}
+}
+
+func (fake *FakeClient) GetAuthTokenCallCount() int {
+	fake.getAuthTokenMutex.RLock()
+	defer fake.getAuthTokenMutex.RUnlock()
+	return len(fake.getAuthTokenArgsForCall)
+}
+
+func (fake *FakeClient) GetAuthTokenReturns(result1 string) {
+	fake.GetAuthTokenStub = nil
+	fake.getAuthTokenReturns = struct {
+		result1 string
+	}{result1}
 }
 
 var _ client.Client = new(FakeClient)
