@@ -18,7 +18,7 @@ var _ = Describe("TokenRefresher", func() {
 
 	BeforeEach(func() {
 		uaaServer = ghttp.NewServer()
-		tokenRefresher = client.NewTokenRefresher(uaaServer.URL())
+		tokenRefresher = client.NewTokenRefresher(uaaServer.URL(), "cf", "")
 	})
 
 	AfterEach(func() {
