@@ -24,7 +24,7 @@ var _ = Describe("Client", func() {
 	BeforeEach(func() {
 		ccServer = ghttp.NewServer()
 		tokenRefresher = &clientfakes.FakeTokenRefresher{}
-		c = client.NewClient(ccServer.URL(), "https://uaa.example.com", "access-token", "refresh-token")
+		c = client.NewClient(ccServer.URL(), "https://uaa.example.com", "access-token", "refresh-token", "cf", "")
 	})
 
 	AfterEach(func() {
